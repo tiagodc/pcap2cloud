@@ -14,8 +14,7 @@ using namespace std;
 
 typedef string hexVector;
 
-string ToHex(const string& s, bool upper_case, string between = " ")
-{
+string ToHex(const string& s, bool upper_case, string between = ""){
     ostringstream ret;
 
     for (string::size_type i = 0; i < s.length(); ++i)
@@ -63,7 +62,7 @@ std::vector<std::string> stringSplitter(string& spacedPcap){
     return vstrings;
 }
 
-string hexToText(string hex){
+string hexToText(string& hex){
     int len = hex.length();
     std::string newString;
     for(int i=0; i< len; i+=2)
@@ -75,15 +74,31 @@ string hexToText(string hex){
     return newString;
 }
 
+vector<string> packetSplitter(string& rawPcap){
+
+    int len = rawPcap.length();
+    vector<string> packetHolder;
+
+    for(int i = 0; i < len; i+=2){
+        string byte = rawPcap.substr(i,4);
+
+        if(byte == "ffee"){
+            packetHolder.push_back( rawPcap.substr(i, 105) );
+        }
+    }
+
+    return packetHolder;
+
+}
+
+
 int main(){
 
     string fileString = hexStringMaker("n24.pcap");
 
-    //cout << fileString << endl;
+    vector<string> packets = packetSplitter(fileString);
 
-    std::vector<std::string> pcapBytes = stringSplitter(fileString);
-
-    //cout << pcapBytes[0]+pcapBytes[1] << endl;
+    cout << packets[0] << endl;
 
     return 0;
 }
