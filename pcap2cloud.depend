@@ -1,0 +1,9 @@
+# depslib dependency file v1.0
+1512745299 source:c:\users\tiago\desktop\pcap2cloud\main.cpp
+	<fstream>
+	<vector>
+	<iostream>
+	<string>
+	<sstream>
+	<iomanip>
+
