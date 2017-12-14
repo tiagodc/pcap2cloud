@@ -1,0 +1,50 @@
+# depslib dependency file v1.0
+1487243502 source:c:\users\tiago\desktop\tlstools\laszip\src\arithmeticdecoder.cpp
+	"arithmeticdecoder.hpp"
+	<string.h>
+	<assert.h>
+	"arithmeticmodel.hpp"
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\arithmeticdecoder.hpp
+	"mydefs.hpp"
+	"bytestreamin.hpp"
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\mydefs.hpp
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\bytestreamin.hpp
+	"mydefs.hpp"
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\arithmeticmodel.hpp
+	<stdio.h>
+	<stdlib.h>
+	"mydefs.hpp"
+
+1487243502 source:c:\users\tiago\desktop\tlstools\laszip\src\arithmeticencoder.cpp
+	"arithmeticencoder.hpp"
+	<string.h>
+	<assert.h>
+	<stdio.h>
+	"arithmeticmodel.hpp"
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\arithmeticencoder.hpp
+	"mydefs.hpp"
+	"bytestreamout.hpp"
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\bytestreamout.hpp
+	"mydefs.hpp"
+
+1487243502 source:c:\users\tiago\desktop\tlstools\laszip\src\arithmeticmodel.cpp
+	"arithmeticmodel.hpp"
+	<stdio.h>
+	<stdlib.h>
+
+1487243502 source:c:\users\tiago\desktop\tlstools\laszip\src\integercompressor.cpp
+	"integercompressor.hpp"
+	<stdlib.h>
+	<assert.h>
+	<math.h>
+
+1487243502 c:\users\tiago\desktop\tlstools\laszip\src\integercompressor.hpp
+	"arithmeticencoder.hpp"
+	"arithmeticdecoder.hpp"
+
