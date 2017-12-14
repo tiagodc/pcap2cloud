@@ -148,7 +148,7 @@ void calcXYZ(dataBlock& db, float clipOut = 0.5){
     db.Z.resize(0);
 
     for(int i = 0; i < db.distances.size(); ++i){
-        float az = ( (db.blocks[i] == 1) ? db.azimuth : db.azimuth2 );
+        float az = db.azimuth; //( (db.blocks[i] == 1) ? db.azimuth : db.azimuth2 );
         //float zRange = ( (db.verticalAngles[i] < 0) ? -1 : 1 );
 
         db.X.push_back( db.distances[i] * cos( (float)db.verticalAngles[i] * PI / 180 ) * sin( az * PI / 180 ) );
@@ -213,13 +213,13 @@ class VLPcloud{
 
                     temp0.azimuth2 = (az0 + az1) / 2;
 
-                    calcXYZ(temp);
+                    calcXYZ(temp0);
                 }
 
                 stampIndex = temp.timeStamp;
             }
 
-            calcXYZ(dataBlocks[0]);
+            calcXYZ(dataBlocks[dataBlocks.size()-1]);
         }
 
 
