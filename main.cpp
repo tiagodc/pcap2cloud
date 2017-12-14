@@ -34,13 +34,14 @@ class dataBlock{
 string ToHex(const string& s, bool upper_case, string between = ""){
     ostringstream ret;
 
+    int ct = 0;
     for (string::size_type i = 0; i < s.length(); ++i)
     {
         int z = s[i]&0xff;
         ret << std::hex << std::setfill('0') << std::setw(2) << (upper_case ? std::uppercase : std::nouppercase) << z << between;
-        //if(i > 20) break;
-    }
+        //if( i > 10000000 ) break;
 
+    }
     return ret.str();
 }
 
@@ -100,7 +101,7 @@ dataBlock packetParser(string& packet){
 
     int timeStamp = -1;
 
-    if(packet.length() > 196){
+    if(packet.length() > 204){
         string revBytes = packet.substr(202,2) + packet.substr(200,2) + packet.substr(198,2) + packet.substr(196,2);
         timeStamp = strtol(revBytes.c_str(), nullptr, 16);
     }
@@ -180,8 +181,9 @@ class VLPcloud{
             boost::replace_all(fileString, "ffee", " ");
 
             std::vector<std::string> packets = stringSplitter(fileString);
-
+            cout << "size: " << packets.size() << endl;
             for(int p = 1; p < packets.size(); ++p){
+                if(packets[p].length() < 196) continue;
                 dataBlock pack = packetParser(packets[p]);
                 dataBlocks.push_back(pack);
             }
@@ -297,9 +299,9 @@ class VLPcloud{
 int main(){
 
     VLPcloud nuvem;
-    nuvem.build("n200.pcap");
+    nuvem.build("luizq.pcap");
     nuvem.calculate();
-    nuvem.write("pcap.txt");
+    nuvem.write("luizq.txt");
 
     return 0;
 }
