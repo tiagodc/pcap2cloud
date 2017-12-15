@@ -19,7 +19,7 @@ using namespace std;
 
 class dataBlock{
     public:
-        int timeStamp;
+        long long int timeStamp;
         float azimuth;
         float azimuth2;
         vector<float> distances;
@@ -31,15 +31,31 @@ class dataBlock{
         vector<float> Z;
 };
 
+class gpsBlock{
+    public:
+        string NMEA;
+        int timeStamp;
+        bool exists = false;
+};
+
+string renameFile(char* fileName, string ending){
+
+    string outFile;
+    string file_path(fileName);
+    unsigned pt = file_path.find_last_of(".");
+    outFile = file_path.substr(0, pt) + ending;
+
+    return outFile;
+
+}
+
 string ToHex(const string& s, bool upper_case, string between = ""){
     ostringstream ret;
 
-    int ct = 0;
     for (string::size_type i = 0; i < s.length(); ++i)
     {
         int z = s[i]&0xff;
         ret << std::hex << std::setfill('0') << std::setw(2) << (upper_case ? std::uppercase : std::nouppercase) << z << between;
-        //if( i > 10000000 ) break;
 
     }
     return ret.str();
@@ -60,12 +76,12 @@ string hexStringMaker(char* fileName){
         file.read (memblock, size);
         file.close();
 
-        cout << "the complete file content is in memory" << endl;
+        cout << "# the complete file content is in memory" << endl;
 
         tohexed = ToHex(std::string(memblock, size), false);
 
        }else{
-        cout << "could not open file" << endl;
+        cout << "# could not open file" << endl;
        }
 
        return tohexed;
@@ -92,6 +108,32 @@ string hexToText(string& hex){
     return newString;
 }
 
+void getGpsStamp(string& hexString, char* fileName){
+
+    const string gps = "244750524d43";
+    string outFile = renameFile(fileName, "_gps.txt");
+
+    cout << outFile << endl;
+
+    ofstream gpsFile;
+    gpsFile.open(outFile);
+    for(int i = 0; i < hexString.length() - 12; i+=2){
+        string temp = hexString.substr(i, 12);
+
+        if(temp == gps){
+            string fullStamp = hexString.substr(i, 144);
+            string unHexed = hexToText(fullStamp);
+
+            string hexClock = hexString.substr(i-10,2) + hexString.substr(i-12,2) + hexString.substr(i-14,2) + hexString.substr(i-16,2);
+            long long int clock = strtoll(hexClock.c_str(), nullptr, 16);
+
+            gpsFile << hexClock << ",TimeUS," << clock << "," << unHexed << "\n";
+        }
+    }
+    gpsFile.close();
+
+}
+
 dataBlock packetParser(string& packet){
 
     vector<float> distances;
@@ -99,11 +141,11 @@ dataBlock packetParser(string& packet){
     vector<int> vAngles;
     vector<int> blocks;
 
-    int timeStamp = -1;
+    long long int timeStamp = -1;
 
     if(packet.length() > 204){
         string revBytes = packet.substr(202,2) + packet.substr(200,2) + packet.substr(198,2) + packet.substr(196,2);
-        timeStamp = strtol(revBytes.c_str(), nullptr, 16);
+        timeStamp = strtoll(revBytes.c_str(), nullptr, 16);
     }
 
     float azimuth = (float)strtol( (packet.substr(2,2) + packet.substr(0,2)).c_str() , nullptr, 16) / 100;
@@ -178,21 +220,33 @@ class VLPcloud{
         void build(char* fileName){
             dataBlocks.resize(0);
             string fileString = hexStringMaker(fileName);
+
+            cout << "# splitting data blocks" << endl;
             boost::replace_all(fileString, "ffee", " ");
 
+            cout << "# structuring data blocks" << endl;
             std::vector<std::string> packets = stringSplitter(fileString);
-            cout << "size: " << packets.size() << endl;
+
+            cout << "# parsing packets" << endl;
             for(int p = 1; p < packets.size(); ++p){
                 if(packets[p].length() < 196) continue;
                 dataBlock pack = packetParser(packets[p]);
                 dataBlocks.push_back(pack);
+
+                if(p % 10000 == 0) cout << 100*p/packets.size() << "% .. ";
             }
+
+            cout << "\n# getting GPS data: ";
+            getGpsStamp(fileString, fileName);
+
         }
 
         void calculate(){
 
             int stampIndex = -1;
             int firstUntimed = 0;
+
+            cout << "# converting hexadecimnal to coordinates" << endl;
 
             for(int i = 0; i < dataBlocks.size(); ++i){
                 dataBlock& temp = dataBlocks[i];
@@ -213,30 +267,39 @@ class VLPcloud{
                     float az0 = temp0.azimuth;
                     float az1 = temp.azimuth;
 
+                    if(az1 < az0) az1 += 360;
+
                     temp0.azimuth2 = (az0 + az1) / 2;
 
                     calcXYZ(temp0);
                 }
 
                 stampIndex = temp.timeStamp;
+
+                if(i % 10000 == 0) cout << 100*i/dataBlocks.size() << "% .. ";
+
             }
 
             calcXYZ(dataBlocks[dataBlocks.size()-1]);
         }
 
 
-        void write(char* fileName, bool shiftZ = false){
+        void write(char* fileName, string extension = "txt", bool shiftZ = false){
 
-            string file(fileName);
-            string extension = file.substr(file.size()-3, 3);
+            //string file(fileName);
+            //string extension = file.substr(file.size()-3, 3);
             boost::algorithm::to_lower(extension);
+
+            string outFile = renameFile(fileName, "."+extension);
+
+            cout << "\n# writing point cloud file: " << outFile << endl;
 
             if(extension == "las" || extension == "laz"){
 
                 int format_macro = ((extension == "laz") ? LAS_TOOLS_FORMAT_LAZ : LAS_TOOLS_FORMAT_LAS);
 
                 LASwriteOpener laswriteopener;
-                laswriteopener.set_file_name(fileName);
+                laswriteopener.set_file_name(outFile.c_str());
                 laswriteopener.set_format(format_macro);
 
                 LASheader lasheader;
@@ -274,7 +337,7 @@ class VLPcloud{
             }else{
 
                 ofstream myfile;
-                myfile.open (fileName);
+                myfile.open (outFile);
                 myfile << "timeStamp block azimuth verticalAngle distance x y z reflectivity\n";
                 for(int p = 1; p < dataBlocks.size(); ++p){
                     dataBlock pack = dataBlocks[p];
@@ -301,7 +364,7 @@ int main(){
     VLPcloud nuvem;
     nuvem.build("luizq.pcap");
     nuvem.calculate();
-    nuvem.write("luizq.txt");
+    nuvem.write("luizq.pcap");
 
     return 0;
 }
