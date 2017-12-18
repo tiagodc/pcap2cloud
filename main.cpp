@@ -12,10 +12,52 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include "laswriter.hpp"
+#include <getopt.h>
 
 #define PI 3.14159265358979323846264338327950288
 
 using namespace std;
+
+struct CommandLine{
+
+    char* inputFile;
+    string outputExtension;
+    float sampleCloud;
+    bool yzTwist;
+    bool help;
+    bool verbose;
+
+} globalArgs;
+
+static const char *optString = "i:e:s:tvh";
+
+static const struct option longOpts[] = {
+    { "input", required_argument, NULL, 'i' },
+    { "extension", required_argument, NULL, 'e' },
+    { "sample", required_argument, NULL, 's' },
+    { "twist", no_argument, NULL, 't' },
+    { "verbose", no_argument, NULL, 'v' },
+    { "help", no_argument, NULL, 'h' },
+    {NULL, no_argument, NULL, 0}
+};
+
+
+void printHelp(){
+
+    cout <<
+        "\n# /*** TLStools - pcap2cloud ***/\n# /*** Command line arguments ***/\n\n"
+        "# -i --input         : input .pcap file path\n"
+        "# -e --extension     : output extension for point cloud (txt, laz or las)\n"
+        "# -s --sample        : sample points for writing (value as proportion, between 0 and 1)\n"
+        "# -t --twist         : shift axes y and z\n"
+        "# -v --verbose       : print extra info during processing\n"
+        "# -h --help          : print this help\n";
+
+        exit(1);
+
+}
+
+/****************************************************/
 
 class dataBlock{
     public:
@@ -49,14 +91,13 @@ string renameFile(char* fileName, string ending){
 
 }
 
-string ToHex(const string& s, bool upper_case, string between = ""){
+string ToHex(const string& s, string between = ""){
     ostringstream ret;
 
     for (string::size_type i = 0; i < s.length(); ++i)
     {
         int z = s[i]&0xff;
-        ret << std::hex << std::setfill('0') << std::setw(2) << (upper_case ? std::uppercase : std::nouppercase) << z << between;
-
+        ret << std::hex << std::setfill('0') << std::setw(2) << z << between;
     }
     return ret.str();
 }
@@ -76,9 +117,9 @@ string hexStringMaker(char* fileName){
         file.read (memblock, size);
         file.close();
 
-        cout << "# the complete file content is in memory" << endl;
+        cout << "# loading file to memory" << endl;
 
-        tohexed = ToHex(std::string(memblock, size), false);
+        tohexed = ToHex(std::string(memblock, size));
 
        }else{
         cout << "# could not open file" << endl;
@@ -200,7 +241,7 @@ void calcXYZ(dataBlock& db, float clipOut = 0.5){
     }
 
     for(int i = db.X.size()-1; i >=0; --i){
-        if(abs(db.X[i]) < clipOut || abs(db.Y[i]) < clipOut || abs(db.Z[i]) < clipOut){
+        if(abs(db.X[i]) < clipOut || abs(db.Y[i]) < clipOut || abs(db.Z[i]) < 0.01){
             db.blocks.erase(db.blocks.begin()+i);
             db.distances.erase(db.distances.begin()+i);
             db.reflectivities.erase(db.reflectivities.begin()+i);
@@ -217,15 +258,18 @@ class VLPcloud{
     public:
         vector<dataBlock> dataBlocks;
 
-        void build(char* fileName){
+        void build(char* fileName, bool verbose){
             dataBlocks.resize(0);
             string fileString = hexStringMaker(fileName);
 
             cout << "# splitting data blocks" << endl;
             boost::replace_all(fileString, "ffee", " ");
 
-            cout << "# structuring data blocks" << endl;
+            cout << "# getting GPS data: ";
+            getGpsStamp(fileString, fileName);
+
             std::vector<std::string> packets = stringSplitter(fileString);
+            fileString = "";
 
             cout << "# parsing packets" << endl;
             for(int p = 1; p < packets.size(); ++p){
@@ -233,20 +277,17 @@ class VLPcloud{
                 dataBlock pack = packetParser(packets[p]);
                 dataBlocks.push_back(pack);
 
-                if(p % 10000 == 0) cout << 100*p/packets.size() << "% .. ";
+                if(verbose && p % 10000 == 0) cout << 100*p/packets.size() << "% .. ";
             }
-
-            cout << "\n# getting GPS data: ";
-            getGpsStamp(fileString, fileName);
-
+            if(verbose) cout << "\n";
         }
 
-        void calculate(){
+        void calculate(bool verbose){
 
             int stampIndex = -1;
             int firstUntimed = 0;
 
-            cout << "# converting hexadecimnal to coordinates" << endl;
+            cout << "# converting hexadecimal to coordinates" << endl;
 
             for(int i = 0; i < dataBlocks.size(); ++i){
                 dataBlock& temp = dataBlocks[i];
@@ -276,7 +317,7 @@ class VLPcloud{
 
                 stampIndex = temp.timeStamp;
 
-                if(i % 10000 == 0) cout << 100*i/dataBlocks.size() << "% .. ";
+                if(verbose && i % 10000 == 0) cout << 100*i/dataBlocks.size() << "% .. ";
 
             }
 
@@ -284,7 +325,7 @@ class VLPcloud{
         }
 
 
-        void write(char* fileName, string extension = "txt", bool shiftZ = false){
+        void write(char* fileName, string extension = "txt", bool shiftZ = false, float sample = 1){
 
             //string file(fileName);
             //string extension = file.substr(file.size()-3, 3);
@@ -292,7 +333,7 @@ class VLPcloud{
 
             string outFile = renameFile(fileName, "."+extension);
 
-            cout << "\n# writing point cloud file: " << outFile << endl;
+            cout << "# writing point cloud file: " << outFile << endl;
 
             if(extension == "las" || extension == "laz"){
 
@@ -316,6 +357,9 @@ class VLPcloud{
                 while (packet != coordinates->end()){
 
                     for(int pt = 0; pt < packet->blocks.size(); ++pt){
+                        float rdn = (float)(rand() % 1000 + 1) / 1000;
+                        if(rdn > sample) continue;
+
                         laspoint.set_x( packet->X[pt] );
                         laspoint.set_y( ((shiftZ) ? packet->Z[pt] : packet->Y[pt]) );
                         laspoint.set_z( ((shiftZ) ? packet->Y[pt] : packet->Z[pt]) );
@@ -342,6 +386,10 @@ class VLPcloud{
                 for(int p = 1; p < dataBlocks.size(); ++p){
                     dataBlock pack = dataBlocks[p];
                     for(int i = 0; i < pack.distances.size(); ++i){
+
+                        float rdn = (float)(rand() % 1000 + 1) / 1000;
+                        if(rdn > sample) continue;
+
                         myfile <<
                         pack.timeStamp << " " <<
                         pack.blocks[i] << " " <<
@@ -359,12 +407,64 @@ class VLPcloud{
         }
 };
 
-int main(){
+int main(int argc, char *argv[]){
+
+    globalArgs.inputFile = "";
+    globalArgs.outputExtension = "txt";
+    globalArgs.sampleCloud = 1;
+    globalArgs.yzTwist = false;
+    globalArgs.help = false;
+    globalArgs.verbose = false;
+
+    int opt = 0;
+	int longIndex = 0;
+
+    opt = getopt_long( argc, argv, optString, longOpts, &longIndex );
+    while( opt != -1 ) {
+        switch( opt ) {
+            case 'i':
+                globalArgs.inputFile = optarg;
+                break;
+
+            case 'e':
+                globalArgs.outputExtension = std::string(optarg);
+                break;
+
+            case 's':
+                globalArgs.sampleCloud = atof(optarg);
+                break;
+
+            case 't':
+                globalArgs.yzTwist = true;
+                break;
+
+            case 'v':
+                globalArgs.verbose = true;
+                break;
+
+            case 'h':
+                globalArgs.help = true;
+                break;
+
+            default:
+                break;
+        }
+
+        opt = getopt_long( argc, argv, optString, longOpts, &longIndex );
+    }
+
+    if(globalArgs.help){
+        printHelp();
+        return 0;
+    }else if(globalArgs.inputFile == ""){
+        cout << "\n# input file (-i) missing.\n";
+        return 0;
+    }
 
     VLPcloud nuvem;
-    nuvem.build("luizq.pcap");
-    nuvem.calculate();
-    nuvem.write("luizq.pcap");
+    nuvem.build(globalArgs.inputFile, globalArgs.verbose);
+    nuvem.calculate(globalArgs.verbose);
+    nuvem.write(globalArgs.inputFile, globalArgs.outputExtension, globalArgs.yzTwist, globalArgs.sampleCloud);
 
     return 0;
 }
